@@ -75,6 +75,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 				}
 				break;
 			case WM_KEYDOWN: {
+
+				DWORD control = CallRead(dll.GetTimescale);
+				float scale = *(float*)&control;
+				float old;
+
 				if (msg.hwnd == frames_list) {
 					if (GetKeyState(VK_CONTROL) < 0) {
 						switch (msg.wParam) {
@@ -125,6 +130,36 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						break;
 					case VK_F3: 
 						SendMessage(window, WM_COMMAND, MAKEWPARAM(IDC_START, 0), 0);
+						break;
+					case VK_F4:
+
+						if (scale != 4) {
+							old = scale;
+							SendMessage(window, WM_COMMAND, MAKEWPARAM(ID_TIMESCALE_4, 0), 0);
+						}
+						else {
+							if (old == 0.1f) {
+								SendMessage(window, WM_COMMAND, MAKEWPARAM(ID_TIMESCALE_10, 0), 0);
+							}
+							else if (old == 0.25f) {
+								SendMessage(window, WM_COMMAND, MAKEWPARAM(ID_TIMESCALE_25, 0), 0);
+							}
+							else if (old == 0.5f) {
+								SendMessage(window, WM_COMMAND, MAKEWPARAM(ID_TIMESCALE_50, 0), 0);
+							}
+							else if (old == 0.75f) {
+								SendMessage(window, WM_COMMAND, MAKEWPARAM(ID_TIMESCALE_75, 0), 0);
+							}
+							else if (old == 1) {
+								SendMessage(window, WM_COMMAND, MAKEWPARAM(ID_TIMESCALE_1, 0), 0);
+							}
+							else if (old == 2) {
+								SendMessage(window, WM_COMMAND, MAKEWPARAM(ID_TIMESCALE_2, 0), 0);
+							}
+							else {
+								SendMessage(window, WM_COMMAND, MAKEWPARAM(ID_TIMESCALE_1, 0), 0);
+							}
+						}
 						break;
 				}
 
