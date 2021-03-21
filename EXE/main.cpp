@@ -97,9 +97,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 					}
 				}
 
+				if (GetKeyState(VK_CONTROL) < 0) { // Known bug: The letter key used in the command will be sent after the open / save dialog is closed
+					if (GetKeyState(VK_SHIFT) < 0) {
+						switch (msg.wParam) {
+						case 0x53:
+							SendMessage(window, WM_COMMAND, MAKEWPARAM(ID_FILE_SAVEAS, 0), 0);
+							break;
+						}
+					}
+					else {
+						switch (msg.wParam) {
+						case 0x4f:
+							SendMessage(window, WM_COMMAND, MAKEWPARAM(ID_FILE_OPEN, 0), 0);
+							break;
+						case 0x53:
+							SendMessage(window, WM_COMMAND, MAKEWPARAM(ID_FILE_SAVE, 0), 0);
+							break;
+						}
+					}
+				}
 				switch (msg.wParam) {
 					case VK_F1:
 						SendMessage(window, WM_COMMAND, MAKEWPARAM(IDC_ADVANCE, 0), 0);
+						break;
+					case VK_F2: 
+						SendMessage(window, WM_COMMAND, MAKEWPARAM(IDC_PAUSE, 0), 0);
+						break;
+					case VK_F3: 
+						SendMessage(window, WM_COMMAND, MAKEWPARAM(IDC_START, 0), 0);
 						break;
 				}
 
@@ -774,6 +799,7 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) 
 			LPNMHDR notif = (LPNMHDR)lParam;
 			if (notif->hwndFrom == frames_list) {
 				switch (notif->code) {
+					case NM_RETURN: 
 					case NM_DBLCLK: {
 						int i = SendMessage(frames_list, LVM_GETNEXTITEM, -1, LVNI_FOCUSED);
 						if (i > -1) {
