@@ -1234,11 +1234,29 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			bool isPaused = CallRead(dll.GetControl) == 1;
 			HWND button = GetDlgItem(window, IDC_PAUSE);
 
-			if (valueAsFloat > expectedValue) { // TODO don't hard code
-				if (!isPaused) { 
+			bool expressionIsTrue = false;
+
+			switch (currentSelectedOperation) {
+	
+				case CompOperation_GreaterThan:
+					expressionIsTrue = valueAsFloat > expectedValue;
+					break;					
+				case CompOperation_GreaterThanOrEquals:
+					expressionIsTrue = valueAsFloat >= expectedValue;
+					break;					
+				case CompOperation_EqualTo:
+					expressionIsTrue = valueAsFloat == expectedValue;
+					break;					
+				case CompOperation_LessThan:
+					expressionIsTrue = valueAsFloat < expectedValue;
+					break;					
+				case CompOperation_LessThanOrEquals:
+					expressionIsTrue = valueAsFloat <= expectedValue;
+					break;
+			}
+			if (expressionIsTrue) {
 
 					PauseGame();
-				}
 			}
 
 			break;
