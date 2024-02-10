@@ -1,13 +1,15 @@
 ﻿#include "stdafx.h"
+#include <windowsx.h>
 
 // #define DEBUG
 
 HANDLE process = 0;
 DWORD focus_frame = 0, main_base = 0;
-HWND window = 0, frames_list = 0, command_input = 0, command_window = 0;
+HWND window = 0, frames_list = 0, command_input = 0, command_window = 0, bruteforcer_window = 0;
 WNDPROC edit_proc = 0, drop_proc = 0;
 char current_demo[0xFF] = { 0 };
 char dll_path[0xFF] = { 0 };
+int paused = 0;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	CreateMutexA(0, FALSE, "Local\\MTAS.exe");
@@ -40,6 +42,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	RegisterClassExW(&wcex);
 	wcex.lpfnWndProc = FaithProc;
 	wcex.lpszClassName = L"mtas_faith";
+	RegisterClassExW(&wcex);
+	wcex.lpfnWndProc = BruteforcerProc;
+	wcex.lpszClassName = L"mtas_bruteforcer";
 	RegisterClassExW(&wcex);
 
 	window = CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_WINDOW), CreateWindow(L"mtas", L"", 0, 0, 0, 0, 0, 0, 0, wcex.hInstance, 0), DlgProc);
@@ -686,6 +691,19 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) 
 					Call(dll.RemoveControl, CONTROL_PAUSE | CONTROL_ADVANCE);
 					SetDlgItemText(hDlg, IDC_PAUSE, L"||");
 					break;
+				case ID_TOOLS_BRUTEFORCER: {
+					HWND hWnd = CreateWindow(L"mtas_bruteforcer", L"Faithd Actor", WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, 500 /*FAITH_WIDTH*/, 600 /*FAITH_HEIGHT*/, 0, 0, GetModuleHandle(0), 0);
+					ShowWindow(hWnd, SW_SHOW);
+					UpdateWindow(hWnd);
+					break;
+					
+					/*
+					if (!bruteforcer_window) {
+						bruteforcer_window = CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_BRUTEFORCER), 0, BruteforcerProc);
+						ShowWindow(bruteforcer_window, SW_SHOW);
+					}
+					*/
+				}
 				case ID_TIMESCALE_10:
 					SetTimescale(0.10f);
 					break;
@@ -1069,6 +1087,197 @@ INT_PTR CALLBACK TranslatorProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	}
 
 	return (INT_PTR)FALSE;
+}
+
+enum DropdownOption
+{
+	DropdownOption_hs,
+	DropdownOption_vs,
+	DROPDOWNOPTION_COUNT
+};
+
+
+enum CompOperation
+{
+	CompOperation_GreaterThan,
+	CompOperation_GreaterThanOrEquals,
+	CompOperation_EqualTo,
+	CompOperation_LessThan,
+	CompOperation_LessThanOrEquals,
+	COMPOPERATION_COUNT
+};
+
+static HWND compLabel;
+static HWND compValue;
+static HWND compOperation;
+static HWND compExpectedValue;
+static const int optionMaxChars = 16;
+static DropdownOption currentSelectedOption;
+static CompOperation currentSelectedOperation;
+
+static TCHAR dropdownOptions[DROPDOWNOPTION_COUNT][optionMaxChars] = {
+	L"hs",
+	L"vs"
+};
+
+static TCHAR CompOperationOptions[COMPOPERATION_COUNT][optionMaxChars] = {
+	L">",
+	L">=",
+	L"==",
+	L"<",
+	L"<="
+};
+
+LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+	DWORD faithH = 50; // FAITH_HEIGHT
+	
+	switch (message) {
+		case WM_CREATE: {
+			SetTimer(hWnd, 0, 20, 0);
+			
+			HINSTANCE hInstance = (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE);
+			HWND resetButton = CreateWindow(L"BUTTON", L"Button", BS_TEXT | WS_CHILD | WS_VISIBLE, 40, 40, 100, 40, hWnd, nullptr, hInstance, NULL);
+			compValue = CreateWindow(L"STATIC", L"text", BS_TEXT | WS_CHILD | WS_VISIBLE, 40, 200, 100, 40, hWnd, nullptr, hInstance, NULL);
+			
+			compLabel = CreateWindow(WC_COMBOBOX, L"", CBS_DROPDOWN | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE, 40, 300, 100, 40, hWnd, nullptr, hInstance, NULL);
+			compOperation = CreateWindow(WC_COMBOBOX, L"", CBS_DROPDOWN | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE, 200, 300, 100, 40, hWnd, nullptr, hInstance, NULL);
+			compExpectedValue = CreateWindow(L"EDIT",
+				NULL,
+				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
+				300, 300, 100, 20,
+				hWnd,
+				nullptr,
+				hInstance,
+				NULL);
+
+
+			for (int i = 0; i < DROPDOWNOPTION_COUNT; i++) {
+
+				TCHAR* option = dropdownOptions[i];
+				SendMessage(compLabel, CB_ADDSTRING, (WPARAM)0, (LPARAM)option);
+			}
+			SendMessage(compLabel, CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+
+			for (int i = 0; i < COMPOPERATION_COUNT; i++) {
+
+				TCHAR* option = CompOperationOptions[i];
+				SendMessage(compOperation, CB_ADDSTRING, (WPARAM)0, (LPARAM)option);
+			}
+			SendMessage(compOperation, CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+			break;
+		}
+		case WM_TIMER: {
+			
+
+			char text[0xFFF] = { 0 };
+			char player[0xFFF] = { 0 };
+			if (process) {
+				UpdateMainBase();
+				ReadBuffer(process, GetPointer(process, 5, main_base, 0xCC, 0x4A4, 0x214, 0x00), player, sizeof(player));
+				ReadBuffer(process, GetPointer(process, 4, main_base, 0xCC, 0x70, 0xF4), player, 8);
+			}
+
+
+			float vx = *(float*)&player[0x100], vy = *(float*)&player[0x104], vz = *(float*)&player[0x108];
+
+			union {
+
+				float valueAsFloat;
+				int valueAsInt;
+			};
+
+			valueAsFloat = 0.f;
+
+			char compTextBuffer[32]{};
+			
+
+			switch (currentSelectedOption)
+			{
+				case DropdownOption_hs: {
+					float hs = sqrt(vx * vx + vy * vy) * 0.036;
+					valueAsFloat = hs;
+					sprintf_s(compTextBuffer, 32, "%.3f", valueAsFloat);
+					break;
+				}
+				case DropdownOption_vs: {
+					break;
+				}
+			}
+			
+			
+			SetWindowTextA(compValue, compTextBuffer);
+
+			//int paused = 0;
+			TCHAR ExpectedValueStringBuffer[32];
+			Edit_GetText(compExpectedValue, ExpectedValueStringBuffer, 32);
+			float expectedValue = _wtof(ExpectedValueStringBuffer);
+
+			if (valueAsFloat > expectedValue) {
+				if (paused == 0 && valueAsFloat > expectedValue) {
+					
+					if (ReadShort(process, (LPVOID)CallRead(dll.GetDemoCommand))) {
+						HWND button = GetDlgItem(window, IDC_PAUSE);
+						wchar_t text[0xFF] = { 0 };
+						GetWindowText(button, text, 0xFF);
+						if (*text == L'▶') {
+							Call(dll.RemoveControl, CONTROL_PAUSE | CONTROL_ADVANCE);
+							SetWindowText(button, L"||");
+						}
+						else {
+							Call(dll.AddControl, CONTROL_PAUSE);
+							SetWindowText(button, L"▶");
+						}
+					}
+
+
+					paused += 1;
+				}
+			}
+	
+
+
+	
+
+			break;
+	
+		}
+		case WM_INITDIALOG: {
+
+		
+			break;
+		}
+		case WM_COMMAND: {
+			if (HIWORD(wParam) == CBN_SELCHANGE) {
+				HWND receivedHandle = (HWND)lParam;
+
+				if (receivedHandle == compLabel) {
+					int ItemIndex = SendMessage(receivedHandle, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
+					currentSelectedOption = (DropdownOption)ItemIndex;
+				}
+				else if (receivedHandle == compOperation)
+				{
+					int ItemIndex = SendMessage(receivedHandle, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
+					currentSelectedOperation = (CompOperation)ItemIndex;
+				}
+
+
+
+			}
+			break;
+		}
+		case WM_NOTIFY: {
+			break;
+		}
+		case WM_CLOSE: {
+			bruteforcer_window = 0;
+			paused = 0;
+			return DefWindowProcA(hWnd, message, wParam, lParam);
+			break;
+		}
+
+	}
+	return DefWindowProc(hWnd, message, wParam, lParam);;
+
 }
 
 LRESULT CALLBACK EditProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {

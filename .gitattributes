@@ -1,0 +1,3 @@
+text=auto
+*.h diff
+*.rc diff
