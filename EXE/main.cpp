@@ -1111,8 +1111,18 @@ INT_PTR CALLBACK TranslatorProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 enum DropdownOption
 {
+	DropdownOption_x,
+	DropdownOption_y,
+	DropdownOption_z,
+	DropdownOption_vx,
+	DropdownOption_vy,
+	DropdownOption_vz,
 	DropdownOption_hs,
 	DropdownOption_vs,
+	DropdownOption_s,
+	DropdownOption_h,
+	DropdownOption_rx,
+	DropdownOption_ry,
 	DROPDOWNOPTION_COUNT
 };
 
@@ -1137,8 +1147,18 @@ static CompOperation currentSelectedOperation;
 static HWND resetButton;
 
 static TCHAR dropdownOptions[DROPDOWNOPTION_COUNT][optionMaxChars] = {
+	L"x",
+	L"y",
+	L"z",
+	L"vx",
+	L"vy",
+	L"vz",
 	L"hs",
-	L"vs"
+	L"vs",
+	L"s",
+	L"h",
+	L"rx",
+	L"ry"
 };
 
 static TCHAR CompOperationOptions[COMPOPERATION_COUNT][optionMaxChars] = {
@@ -1198,32 +1218,68 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				ReadBuffer(process, GetPointer(process, 4, main_base, 0xCC, 0x70, 0xF4), player, 8);
 			}
 
-
-			float vx = *(float*)&player[0x100], vy = *(float*)&player[0x104], vz = *(float*)&player[0x108];
-
-			union {
-
-				float valueAsFloat;
-				int valueAsInt;
-			};
-
-			valueAsFloat = 0.f;
+			float value = 0;
 
 			char compTextBuffer[32]{};
 			
+			float vx = *(float*)&player[0x100];
+			float vy = *(float*)&player[0x104];
+			float vz = *(float*)&player[0x108];
 
 			switch (currentSelectedOption)
 			{
+
+				case DropdownOption_x: {
+					value = *(float*)&player[0xE8];
+					break;
+				}
+				case DropdownOption_y: {
+					value = *(float*)&player[0xEC];
+					break;
+				}
+				case DropdownOption_z: {
+					value = *(float*)&player[0xF0];
+					break;
+				}
+				case DropdownOption_vx: {
+					value = vx;
+					break;
+				}
+				case DropdownOption_vy: {
+					value = vy;
+					break;
+				}
+				case DropdownOption_vz: {
+					value = vz;
+					break;
+				}
 				case DropdownOption_hs: {
-					float hs = sqrt(vx * vx + vy * vy) * 0.036;
-					valueAsFloat = hs;
-					sprintf_s(compTextBuffer, 32, "%.3f", valueAsFloat);
+					value = sqrt(vx * vx + vy * vy) * 0.036;
 					break;
 				}
 				case DropdownOption_vs: {
+					value = fabs(vz) * 0.036;
 					break;
 				}
+				case DropdownOption_s: {
+					value = *(byte*)&player[0x68];
+					break;
+				}
+				case DropdownOption_h: {
+					value = *(DWORD*)&player[0x2B8];
+					break;
+				}
+				case DropdownOption_rx: {
+					value = IntToDegrees(*(int*)player);
+					break;
+				}
+				case DropdownOption_ry: {
+					value = IntToDegrees(*(int*)&player[4]);
+					break;
+				}
+
 			}
+			sprintf_s(compTextBuffer, 32, "%.3f", value);
 			
 
 			SetWindowTextA(compValue, compTextBuffer);
@@ -1239,19 +1295,19 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			switch (currentSelectedOperation) {
 	
 				case CompOperation_GreaterThan:
-					expressionIsTrue = valueAsFloat > expectedValue;
+					expressionIsTrue = value > expectedValue;
 					break;					
 				case CompOperation_GreaterThanOrEquals:
-					expressionIsTrue = valueAsFloat >= expectedValue;
+					expressionIsTrue = value >= expectedValue;
 					break;					
 				case CompOperation_EqualTo:
-					expressionIsTrue = valueAsFloat == expectedValue;
+					expressionIsTrue = value == expectedValue;
 					break;					
 				case CompOperation_LessThan:
-					expressionIsTrue = valueAsFloat < expectedValue;
+					expressionIsTrue = value < expectedValue;
 					break;					
 				case CompOperation_LessThanOrEquals:
-					expressionIsTrue = valueAsFloat <= expectedValue;
+					expressionIsTrue = value <= expectedValue;
 					break;
 			}
 			if (expressionIsTrue) {
