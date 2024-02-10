@@ -9,6 +9,7 @@ static HWND window = 0, frames_list = 0, command_input = 0, command_window = 0, 
 WNDPROC edit_proc = 0, drop_proc = 0;
 char current_demo[0xFF] = { 0 };
 char dll_path[0xFF] = { 0 };
+static bool bruteforcerStarted = false;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	CreateMutexA(0, FALSE, "Local\\MTAS.exe");
@@ -1175,8 +1176,11 @@ static TCHAR CompOperationOptions[COMPOPERATION_COUNT][optionMaxChars] = {
 
 LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	DWORD faithH = 50; // FAITH_HEIGHT
+	static float value_iterated = 0;
+	float mouse_x_min = 10;
+	float mouse_x_max = 30;
+	static bool going = false;
 
-	
 	switch (message) {
 		case WM_CREATE: {
 			
@@ -1215,7 +1219,7 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			break;
 		}
 		case WM_TIMER: {
-			
+
 
 			char text[0xFFF] = { 0 };
 			char player[0xFFF] = { 0 };
@@ -1298,11 +1302,16 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			HWND button = GetDlgItem(window, IDC_PAUSE);
 
 			bool expressionIsTrue = false;
-			int minFrame = 300;
-			int maxFrame = 400;
+			int minFrame = 400;
+			int maxFrame = 450;
 			int frame = CallRead(dll.GetDemoFrame);
 			bool inFrameRange = frame >= minFrame && frame <= maxFrame;
 
+			if (frame < 300) {
+
+				going = false;
+				UnpauseGame();
+			}
 
 			switch (currentSelectedOperation) {
 	
@@ -1322,11 +1331,37 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 					expressionIsTrue = value <= expectedValue;
 					break;
 			}
-			if (expressionIsTrue && inFrameRange) {
+			if (bruteforcerStarted) {
+				if (expressionIsTrue && inFrameRange) {
+						PauseGame();
+				}
+				else if (frame > maxFrame) {
 
-					PauseGame();
+					if (value_iterated <= mouse_x_max) {
+
+						FRAME frame = { 0 };
+						int index = 300;
+						frame.mouse_moves[0].change = value_iterated;
+						frame.mouse_moves[0].delta = 0.02f;
+						WriteBuffer(process, (LPVOID)(CallRead(dll.GetDemoFrames) + (index * sizeof(FRAME))), (char*)&frame, sizeof(FRAME));
+						// set the value on the frame. // this will happen for multiple frames maybe before the goto is executed?
+						// goto the frame before the one that is set.
+						float step = 0.1;
+						value_iterated += step;
+						// counter is an index in the job list array.
+						
+						if (going == false) {
+							Call(dll.GotoFrame, index - 1);
+							going = true;
+						}
+					}
+					else {
+
+						bruteforcerStarted = false;
+					}
+				
+				}
 			}
-
 			break;
 		}
 
@@ -1339,13 +1374,24 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			HWND receivedHandle = (HWND)lParam;
 
 			if (receivedHandle == resetButton) {
-				int index = 300;
+
+				bruteforcerStarted = true;
+				
+				/*
+
+				value_iterated = mouse_x_min;
+
 				FRAME frame = { 0 };
-				frame.mouse_moves[0].change = 200;
-				frame.mouse_moves[0].delta = 999;
-				frame.mouse_moves[1].change = 500;
-				frame.mouse_moves[1].delta = -100;
-				WriteBuffer(process, (LPVOID)(CallRead(dll.GetDemoFrames) + (index * sizeof(FRAME))), (char*)&frame, sizeof(FRAME));
+				int index = 300;
+				for (float i = mouse_x_min; i < mouse_x_max; i += step) {
+
+					frame.mouse_moves[0].change = i;
+					frame.mouse_moves[0].delta = 0.02f;
+					WriteBuffer(process, (LPVOID)(CallRead(dll.GetDemoFrames) + (index * sizeof(FRAME))), (char*)&frame, sizeof(FRAME));
+					Call(dll.GotoFrame, index - 1);
+
+				}
+				*/
 			}
 			if (HIWORD(wParam) == CBN_SELCHANGE) {
 				
