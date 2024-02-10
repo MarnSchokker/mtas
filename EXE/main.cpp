@@ -9,7 +9,6 @@ HWND window = 0, frames_list = 0, command_input = 0, command_window = 0, brutefo
 WNDPROC edit_proc = 0, drop_proc = 0;
 char current_demo[0xFF] = { 0 };
 char dll_path[0xFF] = { 0 };
-int paused = 0;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	CreateMutexA(0, FALSE, "Local\\MTAS.exe");
@@ -274,6 +273,38 @@ void Update() {
 
 		Sleep(20);
 	}
+}
+
+static void ToggleControl() {
+
+	if (ReadShort(process, (LPVOID)CallRead(dll.GetDemoCommand))) {
+		HWND button = GetDlgItem(window, IDC_PAUSE);
+		wchar_t text[0xFF] = { 0 };
+		GetWindowText(button, text, 0xFF);
+		if (*text == L'▶') {
+			Call(dll.RemoveControl, CONTROL_PAUSE | CONTROL_ADVANCE);
+			SetWindowText(button, L"||");
+		}
+		else {
+			Call(dll.AddControl, CONTROL_PAUSE);
+			SetWindowText(button, L"▶");
+		}
+	}
+}
+
+static void PauseGame() {
+
+	HWND button = GetDlgItem(window, IDC_PAUSE);
+	Call(dll.AddControl, CONTROL_PAUSE);
+	SetWindowText(button, L"▶");
+}
+
+static void UnpauseGame() {
+
+	HWND button = GetDlgItem(window, IDC_PAUSE);
+	Call(dll.RemoveControl, CONTROL_PAUSE | CONTROL_ADVANCE);
+	SetWindowText(button, L"||");
+
 }
 
 void UpdateFrame(DWORD index, FRAME *frame) {
@@ -616,18 +647,7 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) 
 					SetFocusFrame(0);
 					break;
 				case IDC_PAUSE: {
-					if (ReadShort(process, (LPVOID)CallRead(dll.GetDemoCommand))) {
-						HWND button = GetDlgItem(hDlg, IDC_PAUSE);
-						wchar_t text[0xFF] = { 0 };
-						GetWindowText(button, text, 0xFF);
-						if (*text == L'▶') {
-							Call(dll.RemoveControl, CONTROL_PAUSE | CONTROL_ADVANCE);
-							SetWindowText(button, L"||");
-						} else {
-							Call(dll.AddControl, CONTROL_PAUSE);
-							SetWindowText(button, L"▶");
-						}
-					}
+					ToggleControl();
 					break;
 				}
 				case IDC_ADVANCE:
@@ -692,7 +712,7 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) 
 					SetDlgItemText(hDlg, IDC_PAUSE, L"||");
 					break;
 				case ID_TOOLS_BRUTEFORCER: {
-					HWND hWnd = CreateWindow(L"mtas_bruteforcer", L"Faithd Actor", WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, 500 /*FAITH_WIDTH*/, 600 /*FAITH_HEIGHT*/, 0, 0, GetModuleHandle(0), 0);
+					HWND hWnd = CreateWindow(L"mtas_bruteforcer", L"Bruteforcer", WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, 500 /*FAITH_WIDTH*/, 600 /*FAITH_HEIGHT*/, 0, 0, GetModuleHandle(0), 0);
 					ShowWindow(hWnd, SW_SHOW);
 					UpdateWindow(hWnd);
 					break;
@@ -1114,6 +1134,7 @@ static HWND compExpectedValue;
 static const int optionMaxChars = 16;
 static DropdownOption currentSelectedOption;
 static CompOperation currentSelectedOperation;
+static HWND resetButton;
 
 static TCHAR dropdownOptions[DROPDOWNOPTION_COUNT][optionMaxChars] = {
 	L"hs",
@@ -1133,10 +1154,10 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	
 	switch (message) {
 		case WM_CREATE: {
-			SetTimer(hWnd, 0, 20, 0);
+			SetTimer(hWnd, 0, 10, 0);
 			
 			HINSTANCE hInstance = (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE);
-			HWND resetButton = CreateWindow(L"BUTTON", L"Button", BS_TEXT | WS_CHILD | WS_VISIBLE, 40, 40, 100, 40, hWnd, nullptr, hInstance, NULL);
+			resetButton = CreateWindow(L"BUTTON", L"Button", BS_TEXT | WS_CHILD | WS_VISIBLE, 40, 40, 100, 40, hWnd, nullptr, hInstance, NULL);
 			compValue = CreateWindow(L"STATIC", L"text", BS_TEXT | WS_CHILD | WS_VISIBLE, 40, 200, 100, 40, hWnd, nullptr, hInstance, NULL);
 			
 			compLabel = CreateWindow(WC_COMBOBOX, L"", CBS_DROPDOWN | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE, 40, 300, 100, 40, hWnd, nullptr, hInstance, NULL);
@@ -1204,51 +1225,38 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				}
 			}
 			
-			
+
 			SetWindowTextA(compValue, compTextBuffer);
 
-			//int paused = 0;
 			TCHAR ExpectedValueStringBuffer[32];
 			Edit_GetText(compExpectedValue, ExpectedValueStringBuffer, 32);
 			float expectedValue = _wtof(ExpectedValueStringBuffer);
+			bool isPaused = CallRead(dll.GetControl) == 1;
+			HWND button = GetDlgItem(window, IDC_PAUSE);
 
-			if (valueAsFloat > expectedValue) {
-				if (paused == 0 && valueAsFloat > expectedValue) {
-					
-					if (ReadShort(process, (LPVOID)CallRead(dll.GetDemoCommand))) {
-						HWND button = GetDlgItem(window, IDC_PAUSE);
-						wchar_t text[0xFF] = { 0 };
-						GetWindowText(button, text, 0xFF);
-						if (*text == L'▶') {
-							Call(dll.RemoveControl, CONTROL_PAUSE | CONTROL_ADVANCE);
-							SetWindowText(button, L"||");
-						}
-						else {
-							Call(dll.AddControl, CONTROL_PAUSE);
-							SetWindowText(button, L"▶");
-						}
-					}
+			if (valueAsFloat > expectedValue) { // TODO don't hard code
+				if (!isPaused) { 
 
-
-					paused += 1;
+					PauseGame();
 				}
 			}
-	
-
-
-	
 
 			break;
-	
 		}
+
 		case WM_INITDIALOG: {
 
 		
 			break;
 		}
 		case WM_COMMAND: {
+			HWND receivedHandle = (HWND)lParam;
+
+			if (receivedHandle == resetButton) {
+				// play
+			}
 			if (HIWORD(wParam) == CBN_SELCHANGE) {
-				HWND receivedHandle = (HWND)lParam;
+				
 
 				if (receivedHandle == compLabel) {
 					int ItemIndex = SendMessage(receivedHandle, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
@@ -1259,10 +1267,8 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 					int ItemIndex = SendMessage(receivedHandle, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
 					currentSelectedOperation = (CompOperation)ItemIndex;
 				}
-
-
-
 			}
+			
 			break;
 		}
 		case WM_NOTIFY: {
@@ -1270,7 +1276,6 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		}
 		case WM_CLOSE: {
 			bruteforcer_window = 0;
-			paused = 0;
 			return DefWindowProcA(hWnd, message, wParam, lParam);
 			break;
 		}
