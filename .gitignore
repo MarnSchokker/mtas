@@ -5,6 +5,8 @@ EXE/EXE.vcxproj.user
 EXE/EXE.vcxproj
 EXE/EXE.vcxproj
 EXE/Debug/*
+EXE/enc_temp_folder/
 */.vs
 *.vcxproj
 *.APS
+EXE/enc_temp_folder/d7cda02c46bf1eda9ab331c9ae8f1a/main.cpp

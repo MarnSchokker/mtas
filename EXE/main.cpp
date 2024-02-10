@@ -5,7 +5,7 @@
 
 HANDLE process = 0;
 DWORD focus_frame = 0, main_base = 0;
-HWND window = 0, frames_list = 0, command_input = 0, command_window = 0, bruteforcer_window = 0;
+static HWND window = 0, frames_list = 0, command_input = 0, command_window = 0, bruteforcer_window = 0;
 WNDPROC edit_proc = 0, drop_proc = 0;
 char current_demo[0xFF] = { 0 };
 char dll_path[0xFF] = { 0 };
@@ -712,9 +712,13 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) 
 					SetDlgItemText(hDlg, IDC_PAUSE, L"||");
 					break;
 				case ID_TOOLS_BRUTEFORCER: {
-					HWND hWnd = CreateWindow(L"mtas_bruteforcer", L"Bruteforcer", WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, 500 /*FAITH_WIDTH*/, 600 /*FAITH_HEIGHT*/, 0, 0, GetModuleHandle(0), 0);
-					ShowWindow(hWnd, SW_SHOW);
-					UpdateWindow(hWnd);
+					if (!bruteforcer_window) {
+						HWND hWnd = CreateWindow(L"mtas_bruteforcer", L"Bruteforcer", WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, 500 /*FAITH_WIDTH*/, 600 /*FAITH_HEIGHT*/, 0, 0, GetModuleHandle(0), 0);
+						ShowWindow(bruteforcer_window, SW_SHOW);
+						UpdateWindow(bruteforcer_window);
+					}
+
+					SetFocus(bruteforcer_window);
 					break;
 					
 					/*
@@ -1171,9 +1175,12 @@ static TCHAR CompOperationOptions[COMPOPERATION_COUNT][optionMaxChars] = {
 
 LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	DWORD faithH = 50; // FAITH_HEIGHT
+
 	
 	switch (message) {
 		case WM_CREATE: {
+			
+			bruteforcer_window = hWnd;
 			SetTimer(hWnd, 0, 10, 0);
 			
 			HINSTANCE hInstance = (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE);
@@ -1291,6 +1298,11 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			HWND button = GetDlgItem(window, IDC_PAUSE);
 
 			bool expressionIsTrue = false;
+			int minFrame = 300;
+			int maxFrame = 400;
+			int frame = CallRead(dll.GetDemoFrame);
+			bool inFrameRange = frame >= minFrame && frame <= maxFrame;
+
 
 			switch (currentSelectedOperation) {
 	
@@ -1310,7 +1322,7 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 					expressionIsTrue = value <= expectedValue;
 					break;
 			}
-			if (expressionIsTrue) { // and is between a range of frames set by the user.
+			if (expressionIsTrue && inFrameRange) {
 
 					PauseGame();
 			}
@@ -1327,7 +1339,13 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			HWND receivedHandle = (HWND)lParam;
 
 			if (receivedHandle == resetButton) {
-				// play
+				int index = 300;
+				FRAME frame = { 0 };
+				frame.mouse_moves[0].change = 200;
+				frame.mouse_moves[0].delta = 999;
+				frame.mouse_moves[1].change = 500;
+				frame.mouse_moves[1].delta = -100;
+				WriteBuffer(process, (LPVOID)(CallRead(dll.GetDemoFrames) + (index * sizeof(FRAME))), (char*)&frame, sizeof(FRAME));
 			}
 			if (HIWORD(wParam) == CBN_SELCHANGE) {
 				
