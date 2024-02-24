@@ -1114,44 +1114,44 @@ INT_PTR CALLBACK TranslatorProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	return (INT_PTR)FALSE;
 }
 
-enum DropdownOption
+enum BruteforcerFaithDataType
 {
-	DropdownOption_x,
-	DropdownOption_y,
-	DropdownOption_z,
-	DropdownOption_vx,
-	DropdownOption_vy,
-	DropdownOption_vz,
-	DropdownOption_hs,
-	DropdownOption_vs,
-	DropdownOption_s,
-	DropdownOption_h,
-	DropdownOption_rx,
-	DropdownOption_ry,
-	DROPDOWNOPTION_COUNT
+	BruteforcerFaithDataType_x,
+	BruteforcerFaithDataType_y,
+	BruteforcerFaithDataType_z,
+	BruteforcerFaithDataType_vx,
+	BruteforcerFaithDataType_vy,
+	BruteforcerFaithDataType_vz,
+	BruteforcerFaithDataType_hs,
+	BruteforcerFaithDataType_vs,
+	BruteforcerFaithDataType_s,
+	BruteforcerFaithDataType_h,
+	BruteforcerFaithDataType_rx,
+	BruteforcerFaithDataType_ry,
+	BruteforcerFaithDataType_Count
 };
 
 
-enum CompOperation
+enum BruteforcerComparison
 {
-	CompOperation_GreaterThan,
-	CompOperation_GreaterThanOrEquals,
-	CompOperation_EqualTo,
-	CompOperation_LessThan,
-	CompOperation_LessThanOrEquals,
-	COMPOPERATION_COUNT
+	BruteforcerComparison_GreaterThan,
+	BruteforcerComparison_GreaterThanOrEquals,
+	BruteforcerComparison_EqualTo,
+	BruteforcerComparison_LessThan,
+	BruteforcerComparison_LessThanOrEquals,
+	BruteforcerComparison_Count
 };
 
-static HWND compLabel;
-static HWND compValue;
-static HWND compOperation;
-static HWND compExpectedValue;
-static const int optionMaxChars = 16;
-static DropdownOption currentSelectedOption;
-static CompOperation currentSelectedOperation;
-static HWND resetButton;
+static HWND bruteforcer_faithDataDropdown;
+static HWND bruteforcer_faithDataDisplay;
+static HWND bruteforcer_comparisonDropdown;
+static HWND bruteforcer_expectedValueBox;
+static const int bruteforcer_optionMaxChars = 3;
+static BruteforcerFaithDataType bruteforcer_selectedFaithData;
+static BruteforcerComparison bruteforcer_selectedComparison;
+static HWND bruteforcer_startButton;
 
-static TCHAR dropdownOptions[DROPDOWNOPTION_COUNT][optionMaxChars] = {
+static TCHAR dropdownOptions[BruteforcerFaithDataType_Count][bruteforcer_optionMaxChars] = {
 	L"x",
 	L"y",
 	L"z",
@@ -1166,7 +1166,7 @@ static TCHAR dropdownOptions[DROPDOWNOPTION_COUNT][optionMaxChars] = {
 	L"ry"
 };
 
-static TCHAR CompOperationOptions[COMPOPERATION_COUNT][optionMaxChars] = {
+static TCHAR BruteforcerComparisonOptions[BruteforcerComparison_Count][bruteforcer_optionMaxChars] = {
 	L">",
 	L">=",
 	L"==",
@@ -1188,12 +1188,12 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			SetTimer(hWnd, 0, 10, 0);
 			
 			HINSTANCE hInstance = (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE);
-			resetButton = CreateWindow(L"BUTTON", L"Button", BS_TEXT | WS_CHILD | WS_VISIBLE, 40, 40, 100, 40, hWnd, nullptr, hInstance, NULL);
-			compValue = CreateWindow(L"STATIC", L"text", BS_TEXT | WS_CHILD | WS_VISIBLE, 40, 200, 100, 40, hWnd, nullptr, hInstance, NULL);
+			bruteforcer_startButton = CreateWindow(L"BUTTON", L"Button", BS_TEXT | WS_CHILD | WS_VISIBLE, 40, 40, 100, 40, hWnd, nullptr, hInstance, NULL);
+			bruteforcer_faithDataDisplay = CreateWindow(L"STATIC", L"text", BS_TEXT | WS_CHILD | WS_VISIBLE, 40, 200, 100, 40, hWnd, nullptr, hInstance, NULL);
 			
-			compLabel = CreateWindow(WC_COMBOBOX, L"", CBS_DROPDOWN | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE, 40, 300, 100, 40, hWnd, nullptr, hInstance, NULL);
-			compOperation = CreateWindow(WC_COMBOBOX, L"", CBS_DROPDOWN | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE, 200, 300, 100, 40, hWnd, nullptr, hInstance, NULL);
-			compExpectedValue = CreateWindow(L"EDIT",
+			bruteforcer_faithDataDropdown = CreateWindow(WC_COMBOBOX, L"", CBS_DROPDOWN | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE, 40, 300, 100, 40, hWnd, nullptr, hInstance, NULL);
+			bruteforcer_comparisonDropdown = CreateWindow(WC_COMBOBOX, L"", CBS_DROPDOWN | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE, 200, 300, 100, 40, hWnd, nullptr, hInstance, NULL);
+			bruteforcer_expectedValueBox = CreateWindow(L"EDIT",
 				NULL,
 				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
 				300, 300, 100, 20,
@@ -1203,19 +1203,19 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				NULL);
 
 
-			for (int i = 0; i < DROPDOWNOPTION_COUNT; i++) {
+			for (int i = 0; i < BruteforcerFaithDataType_Count; i++) {
 
 				TCHAR* option = dropdownOptions[i];
-				SendMessage(compLabel, CB_ADDSTRING, (WPARAM)0, (LPARAM)option);
+				SendMessage(bruteforcer_faithDataDropdown, CB_ADDSTRING, (WPARAM)0, (LPARAM)option);
 			}
-			SendMessage(compLabel, CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+			SendMessage(bruteforcer_faithDataDropdown, CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 
-			for (int i = 0; i < COMPOPERATION_COUNT; i++) {
+			for (int i = 0; i < BruteforcerComparison_Count; i++) {
 
-				TCHAR* option = CompOperationOptions[i];
-				SendMessage(compOperation, CB_ADDSTRING, (WPARAM)0, (LPARAM)option);
+				TCHAR* option = BruteforcerComparisonOptions[i];
+				SendMessage(bruteforcer_comparisonDropdown, CB_ADDSTRING, (WPARAM)0, (LPARAM)option);
 			}
-			SendMessage(compOperation, CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+			SendMessage(bruteforcer_comparisonDropdown, CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 			break;
 		}
 		case WM_TIMER: {
@@ -1237,54 +1237,54 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			float vy = *(float*)&player[0x104];
 			float vz = *(float*)&player[0x108];
 
-			switch (currentSelectedOption)
+			switch (bruteforcer_selectedFaithData)
 			{
 
-				case DropdownOption_x: {
+				case BruteforcerFaithDataType_x: {
 					value = *(float*)&player[0xE8];
 					break;
 				}
-				case DropdownOption_y: {
+				case BruteforcerFaithDataType_y: {
 					value = *(float*)&player[0xEC];
 					break;
 				}
-				case DropdownOption_z: {
+				case BruteforcerFaithDataType_z: {
 					value = *(float*)&player[0xF0];
 					break;
 				}
-				case DropdownOption_vx: {
+				case BruteforcerFaithDataType_vx: {
 					value = vx;
 					break;
 				}
-				case DropdownOption_vy: {
+				case BruteforcerFaithDataType_vy: {
 					value = vy;
 					break;
 				}
-				case DropdownOption_vz: {
+				case BruteforcerFaithDataType_vz: {
 					value = vz;
 					break;
 				}
-				case DropdownOption_hs: {
+				case BruteforcerFaithDataType_hs: {
 					value = sqrt(vx * vx + vy * vy) * 0.036;
 					break;
 				}
-				case DropdownOption_vs: {
+				case BruteforcerFaithDataType_vs: {
 					value = fabs(vz) * 0.036;
 					break;
 				}
-				case DropdownOption_s: {
+				case BruteforcerFaithDataType_s: {
 					value = *(byte*)&player[0x68];
 					break;
 				}
-				case DropdownOption_h: {
+				case BruteforcerFaithDataType_h: {
 					value = *(DWORD*)&player[0x2B8];
 					break;
 				}
-				case DropdownOption_rx: {
+				case BruteforcerFaithDataType_rx: {
 					value = IntToDegrees(*(int*)player);
 					break;
 				}
-				case DropdownOption_ry: {
+				case BruteforcerFaithDataType_ry: {
 					value = IntToDegrees(*(int*)&player[4]);
 					break;
 				}
@@ -1293,11 +1293,12 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			sprintf_s(compTextBuffer, 32, "%.3f", value);
 			
 
-			SetWindowTextA(compValue, compTextBuffer);
+			SetWindowTextA(bruteforcer_faithDataDisplay, compTextBuffer);
 
 			TCHAR ExpectedValueStringBuffer[32];
-			Edit_GetText(compExpectedValue, ExpectedValueStringBuffer, 32);
+			Edit_GetText(bruteforcer_expectedValueBox, ExpectedValueStringBuffer, 32);
 			float expectedValue = _wtof(ExpectedValueStringBuffer);
+
 			bool isPaused = CallRead(dll.GetControl) == 1;
 			HWND button = GetDlgItem(window, IDC_PAUSE);
 
@@ -1307,27 +1308,27 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			int frame = CallRead(dll.GetDemoFrame);
 			bool inFrameRange = frame >= minFrame && frame <= maxFrame;
 
-			if (frame < 300) {
+			if (frame < 300 && going) {
 
 				going = false;
-				UnpauseGame();
+				UnpauseGame(); // bad
 			}
 
-			switch (currentSelectedOperation) {
+			switch (bruteforcer_selectedComparison) {
 	
-				case CompOperation_GreaterThan:
+				case BruteforcerComparison_GreaterThan:
 					expressionIsTrue = value > expectedValue;
 					break;					
-				case CompOperation_GreaterThanOrEquals:
+				case BruteforcerComparison_GreaterThanOrEquals:
 					expressionIsTrue = value >= expectedValue;
 					break;					
-				case CompOperation_EqualTo:
+				case BruteforcerComparison_EqualTo:
 					expressionIsTrue = value == expectedValue;
 					break;					
-				case CompOperation_LessThan:
+				case BruteforcerComparison_LessThan:
 					expressionIsTrue = value < expectedValue;
 					break;					
-				case CompOperation_LessThanOrEquals:
+				case BruteforcerComparison_LessThanOrEquals:
 					expressionIsTrue = value <= expectedValue;
 					break;
 			}
@@ -1343,6 +1344,8 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 						int index = 300;
 						frame.mouse_moves[0].change = value_iterated;
 						frame.mouse_moves[0].delta = 0.02f;
+						frame.mouse_moves[1].change = value_iterated;
+						frame.mouse_moves[1].delta = -0.02f;
 						WriteBuffer(process, (LPVOID)(CallRead(dll.GetDemoFrames) + (index * sizeof(FRAME))), (char*)&frame, sizeof(FRAME));
 						// set the value on the frame. // this will happen for multiple frames maybe before the goto is executed?
 						// goto the frame before the one that is set.
@@ -1373,7 +1376,7 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		case WM_COMMAND: {
 			HWND receivedHandle = (HWND)lParam;
 
-			if (receivedHandle == resetButton) {
+			if (receivedHandle == bruteforcer_startButton) {
 
 				bruteforcerStarted = true;
 				
@@ -1396,14 +1399,14 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			if (HIWORD(wParam) == CBN_SELCHANGE) {
 				
 
-				if (receivedHandle == compLabel) {
+				if (receivedHandle == bruteforcer_faithDataDropdown) {
 					int ItemIndex = SendMessage(receivedHandle, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
-					currentSelectedOption = (DropdownOption)ItemIndex;
+					bruteforcer_selectedFaithData = (BruteforcerFaithDataType)ItemIndex;
 				}
-				else if (receivedHandle == compOperation)
+				else if (receivedHandle == bruteforcer_comparisonDropdown)
 				{
 					int ItemIndex = SendMessage(receivedHandle, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
-					currentSelectedOperation = (CompOperation)ItemIndex;
+					bruteforcer_selectedComparison = (BruteforcerComparison)ItemIndex;
 				}
 			}
 			
