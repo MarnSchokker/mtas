@@ -2,6 +2,7 @@
 #include <windowsx.h>
 
 // #define DEBUG
+#define arrayCount(arr) sizeof(arr) / sizeof(arr[0])
 
 HANDLE process = 0;
 DWORD focus_frame = 0, main_base = 0;
@@ -9,7 +10,9 @@ static HWND window = 0, frames_list = 0, command_input = 0, command_window = 0, 
 WNDPROC edit_proc = 0, drop_proc = 0;
 char current_demo[0xFF] = { 0 };
 char dll_path[0xFF] = { 0 };
-static bool bruteforcerStarted = false;
+static bool bruteforcer_started = false;
+static int bruteforcer_iteratedFrame;
+static int bruteforcer_firstFreemouseMoves;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	CreateMutexA(0, FALSE, "Local\\MTAS.exe");
@@ -1146,6 +1149,13 @@ static HWND bruteforcer_faithDataDropdown;
 static HWND bruteforcer_faithDataDisplay;
 static HWND bruteforcer_comparisonDropdown;
 static HWND bruteforcer_expectedValueBox;
+static HWND bruteforcer_iteratedFrameBox;
+static HWND bruteforcer_mouseMinXBox;
+static HWND bruteforcer_mouseMaxXBox;
+static HWND bruteforcer_mouseStepXBox;
+static HWND bruteforcer_mouseMinYBox;
+static HWND bruteforcer_mouseMaxYBox;
+static HWND bruteforcer_mouseStepYBox;
 static const int bruteforcer_optionMaxChars = 3;
 static BruteforcerFaithDataType bruteforcer_selectedFaithData;
 static BruteforcerComparison bruteforcer_selectedComparison;
@@ -1175,10 +1185,14 @@ static TCHAR BruteforcerComparisonOptions[BruteforcerComparison_Count][bruteforc
 };
 
 LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-	DWORD faithH = 50; // FAITH_HEIGHT
-	static float value_iterated = 0;
-	float mouse_x_min = 10;
-	float mouse_x_max = 30;
+	static float mouseX = 0;
+	static float mouseY = 0;
+	static float mouseMinX;
+	static float mouseMaxX;
+	static float mouseStepX;
+	static float mouseMinY;
+	static float mouseMaxY;
+	static float mouseStepY;
 	static bool going = false;
 
 	switch (message) {
@@ -1202,12 +1216,75 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				hInstance,
 				NULL);
 
+			bruteforcer_iteratedFrameBox = CreateWindow(L"EDIT",
+				NULL,
+				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
+				300, 200, 100, 20,
+				hWnd,
+				nullptr,
+				hInstance,
+				NULL);
+
+			bruteforcer_mouseMinXBox = CreateWindow(L"EDIT",
+				NULL,
+				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
+				200, 100, 100, 20,
+				hWnd,
+				nullptr,
+				hInstance,
+				NULL);
+
+			bruteforcer_mouseMaxXBox = CreateWindow(L"EDIT",
+				NULL,
+				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
+				250, 100, 100, 20,
+				hWnd,
+				nullptr,
+				hInstance,
+				NULL);
+
+			bruteforcer_mouseStepXBox = CreateWindow(L"EDIT",
+				NULL,
+				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
+				300, 100, 100, 20,
+				hWnd,
+				nullptr,
+				hInstance,
+				NULL);
+
+			bruteforcer_mouseMinYBox = CreateWindow(L"EDIT",
+				NULL,
+				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
+				200, 150, 100, 20,
+				hWnd,
+				nullptr,
+				hInstance,
+				NULL);
+
+			bruteforcer_mouseMaxYBox = CreateWindow(L"EDIT",
+				NULL,
+				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
+				250, 150, 100, 20,
+				hWnd,
+				nullptr,
+				hInstance,
+				NULL);
+
+			bruteforcer_mouseStepYBox = CreateWindow(L"EDIT",
+				NULL,
+				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
+				300, 150, 100, 20,
+				hWnd,
+				nullptr,
+				hInstance,
+				NULL);
 
 			for (int i = 0; i < BruteforcerFaithDataType_Count; i++) {
 
 				TCHAR* option = dropdownOptions[i];
 				SendMessage(bruteforcer_faithDataDropdown, CB_ADDSTRING, (WPARAM)0, (LPARAM)option);
 			}
+
 			SendMessage(bruteforcer_faithDataDropdown, CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 
 			for (int i = 0; i < BruteforcerComparison_Count; i++) {
@@ -1215,6 +1292,7 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				TCHAR* option = BruteforcerComparisonOptions[i];
 				SendMessage(bruteforcer_comparisonDropdown, CB_ADDSTRING, (WPARAM)0, (LPARAM)option);
 			}
+
 			SendMessage(bruteforcer_comparisonDropdown, CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
 			break;
 		}
@@ -1303,15 +1381,16 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			HWND button = GetDlgItem(window, IDC_PAUSE);
 
 			bool expressionIsTrue = false;
+			// TODO: expose min and max frame variable to the UI.
 			int minFrame = 400;
 			int maxFrame = 450;
 			int frame = CallRead(dll.GetDemoFrame);
 			bool inFrameRange = frame >= minFrame && frame <= maxFrame;
 
-			if (frame < 300 && going) {
+			if (frame < bruteforcer_iteratedFrame && going) {
 
 				going = false;
-				UnpauseGame(); // bad
+				UnpauseGame();
 			}
 
 			switch (bruteforcer_selectedComparison) {
@@ -1332,37 +1411,40 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 					expressionIsTrue = value <= expectedValue;
 					break;
 			}
-			if (bruteforcerStarted) {
+			if (bruteforcer_started) {
 				if (expressionIsTrue && inFrameRange) {
-						PauseGame();
+					PauseGame();
 				}
 				else if (frame > maxFrame) {
 
-					if (value_iterated <= mouse_x_max) {
+					if (mouseX <= mouseMaxX + 0.5 * mouseStepX) {
 
-						FRAME frame = { 0 };
-						int index = 300;
-						frame.mouse_moves[0].change = value_iterated;
-						frame.mouse_moves[0].delta = 0.02f;
-						frame.mouse_moves[1].change = value_iterated;
-						frame.mouse_moves[1].delta = -0.02f;
-						WriteBuffer(process, (LPVOID)(CallRead(dll.GetDemoFrames) + (index * sizeof(FRAME))), (char*)&frame, sizeof(FRAME));
-						// set the value on the frame. // this will happen for multiple frames maybe before the goto is executed?
-						// goto the frame before the one that is set.
-						float step = 0.1;
-						value_iterated += step;
-						// counter is an index in the job list array.
+						FRAME frameData;
+						ReadBuffer(process, (LPVOID)(CallRead(dll.GetDemoFrames) + (bruteforcer_iteratedFrame * sizeof(FRAME))), (char*)&frameData, sizeof(FRAME));
+
+						frameData.mouse_moves[bruteforcer_firstFreemouseMoves].change = mouseX;
+						frameData.mouse_moves[bruteforcer_firstFreemouseMoves].delta = 0.02f;
+						if (bruteforcer_firstFreemouseMoves-1 < arrayCount(frameData.mouse_moves)) {
+							frameData.mouse_moves[bruteforcer_firstFreemouseMoves+1].change = mouseY;
+							frameData.mouse_moves[bruteforcer_firstFreemouseMoves+1].delta = -0.02f;
+						}
+
+						WriteBuffer(process, (LPVOID)(CallRead(dll.GetDemoFrames) + (bruteforcer_iteratedFrame * sizeof(FRAME))), (char*)&frameData, sizeof(FRAME));
+
+						mouseY += mouseStepY;
+						if (mouseY >= mouseMaxY + 0.5 * mouseStepY) {
+							mouseX += mouseStepX;
+							mouseY = mouseMinY;
+						}
 						
 						if (going == false) {
-							Call(dll.GotoFrame, index - 1);
+							Call(dll.GotoFrame, bruteforcer_iteratedFrame - 1);
 							going = true;
 						}
 					}
 					else {
-
-						bruteforcerStarted = false;
+						bruteforcer_started = false;
 					}
-				
 				}
 			}
 			break;
@@ -1378,24 +1460,44 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
 			if (receivedHandle == bruteforcer_startButton) {
 
-				bruteforcerStarted = true;
-				
-				/*
+				bruteforcer_started = true;
 
-				value_iterated = mouse_x_min;
+				TCHAR stringBuffer[32];
+				Edit_GetText(bruteforcer_iteratedFrameBox, stringBuffer, 32);
+				bruteforcer_iteratedFrame = _wtof(stringBuffer);
 
-				FRAME frame = { 0 };
-				int index = 300;
-				for (float i = mouse_x_min; i < mouse_x_max; i += step) {
+				FRAME frameData;
+				ReadBuffer(process, (LPVOID)(CallRead(dll.GetDemoFrames) + (bruteforcer_iteratedFrame * sizeof(FRAME))), (char*)&frameData, sizeof(FRAME));
 
-					frame.mouse_moves[0].change = i;
-					frame.mouse_moves[0].delta = 0.02f;
-					WriteBuffer(process, (LPVOID)(CallRead(dll.GetDemoFrames) + (index * sizeof(FRAME))), (char*)&frame, sizeof(FRAME));
-					Call(dll.GotoFrame, index - 1);
+				for (DWORD i = 0; i < arrayCount(frameData.mouse_moves); ++i) {
 
+					auto mm = frameData.mouse_moves[i];
+					bruteforcer_firstFreemouseMoves = i;
+					if (mm.delta == 0) break;
 				}
-				*/
+
+				Edit_GetText(bruteforcer_mouseMinXBox, stringBuffer, 32);
+				mouseMinX = _wtof(stringBuffer);
+
+				Edit_GetText(bruteforcer_mouseMaxXBox, stringBuffer, 32);
+				mouseMaxX = _wtof(stringBuffer);
+
+				Edit_GetText(bruteforcer_mouseStepXBox, stringBuffer, 32);
+				mouseStepX = _wtof(stringBuffer);
+
+				Edit_GetText(bruteforcer_mouseMinYBox, stringBuffer, 32);
+				mouseMinY = _wtof(stringBuffer);
+
+				Edit_GetText(bruteforcer_mouseMaxYBox, stringBuffer, 32);
+				mouseMaxY = _wtof(stringBuffer);
+
+				Edit_GetText(bruteforcer_mouseStepYBox, stringBuffer, 32);
+				mouseStepY = _wtof(stringBuffer);
+
+				mouseX = mouseMinX;	
+				mouseY = mouseMinY;
 			}
+
 			if (HIWORD(wParam) == CBN_SELCHANGE) {
 				
 
