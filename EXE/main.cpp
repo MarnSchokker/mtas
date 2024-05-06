@@ -3,6 +3,7 @@
 
 // #define DEBUG
 #define arrayCount(arr) sizeof(arr) / sizeof(arr[0])
+typedef LONG_PTR(CALLBACK* DefEditProc)(HWND, UINT, WPARAM, LPARAM);
 
 HANDLE process = 0;
 DWORD focus_frame = 0, main_base = 0;
@@ -13,6 +14,7 @@ char dll_path[0xFF] = { 0 };
 static bool bruteforcer_started = false;
 static int bruteforcer_iteratedFrame;
 static int bruteforcer_firstFreemouseMoves;
+static DefEditProc default_edit_box_window_proc;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 	CreateMutexA(0, FALSE, "Local\\MTAS.exe");
@@ -43,6 +45,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	wcex.hCursor = LoadCursor(0, IDC_ARROW);
 	wcex.lpszClassName = L"mtas";
 	RegisterClassExW(&wcex);
+
 	wcex.lpfnWndProc = FaithProc;
 	wcex.lpszClassName = L"mtas_faith";
 	RegisterClassExW(&wcex);
@@ -101,11 +104,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						}
 					}
 				}
-				else if (IsDialogMessage(bruteforcer_window, &msg)) {
-					SendMessage(bruteforcer_window, WM_KEYDOWN, msg.wParam, msg.lParam);
-					break;
+				else if (IsDialogMessage(bruteforcer_window, &msg)) { 
+					// Continue to avoid calling translate and dispatch, since IsDialogMessage calls these
+					// and sends them to the bruteforcer_window.
+					// The reason for using IsDialogMessage is that it handles child edit boxes, which are
+					// hWnds by themselves.
+					continue; 
 				}
-				
+
 				switch (msg.wParam) {
 					case VK_F1:
 						SendMessage(window, WM_COMMAND, MAKEWPARAM(IDC_ADVANCE, 0), 0);
@@ -721,16 +727,7 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) 
 						bruteforcer_window = CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_BRUTEFORCER), 0, BruteforcerProc);
 						ShowWindow(bruteforcer_window, SW_SHOW);
 					}
-
-					//SetFocus(bruteforcer_window);
 					break;
-					
-					/*
-					if (!bruteforcer_window) {
-						bruteforcer_window = CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_BRUTEFORCER), 0, BruteforcerProc);
-						ShowWindow(bruteforcer_window, SW_SHOW);
-					}
-					*/
 				}
 				case ID_TIMESCALE_10:
 					SetTimescale(0.10f);
@@ -1185,9 +1182,85 @@ static TCHAR BruteforcerComparisonOptions[BruteforcerComparison_Count][bruteforc
 	L"<="
 };
 
+static INT_PTR CALLBACK EditFloatProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+
+	switch (message) 
+	{
+		case WM_CHAR: 	
+		{
+			static constexpr int max_edit_text_len = 32;
+			TCHAR edit_text_buffer[max_edit_text_len];
+			Edit_GetText(hWnd, edit_text_buffer, max_edit_text_len);
+			bool is_valid_len = wcslen(edit_text_buffer) < max_edit_text_len - 1;
+
+			bool is_modifier_held = 
+				GetKeyState(VK_CONTROL) < 0 ||
+				GetKeyState(VK_LMENU) < 0 ||
+				GetKeyState(VK_RMENU) < 0 
+				;
+			if (!is_modifier_held)
+			{
+				bool is_valid_char = 
+					wParam >= '0' && wParam <= '9' ||
+					wParam == 0x08
+					;
+
+				if (!is_valid_len && wParam != 0x08) // There's a bug here where control + backspace is always allowed because keys using modifiers are always allowed.
+				{
+					return 0;
+				}
+				else if (wParam == '.') 
+				{
+					if (wcsstr(edit_text_buffer, L".")) 
+					{
+						return 0;
+					}
+				}
+				else if (wParam == '-')
+				{
+					if (wcslen(edit_text_buffer) > 0)
+					{
+						DWORD caret_pos;
+						SendMessage(hWnd, EM_GETSEL, 0, (LPARAM)&caret_pos);
+						if (edit_text_buffer[0] != '-')
+						{
+							MoveMemory(edit_text_buffer + 1, edit_text_buffer, (max_edit_text_len - 1) * sizeof(TCHAR));
+							edit_text_buffer[0] = '-';
+							edit_text_buffer[max_edit_text_len - 1] = 0;
+							Edit_SetText(hWnd, edit_text_buffer);
+							caret_pos += 1;
+						}
+						else {
+							MoveMemory(edit_text_buffer, edit_text_buffer + 1, (max_edit_text_len - 1) * sizeof(TCHAR));
+							edit_text_buffer[max_edit_text_len - 1] = 0;
+							Edit_SetText(hWnd, edit_text_buffer);
+							if (caret_pos > 0) 
+							{
+								caret_pos -= 1;
+							}
+						}
+						SendMessage( hWnd, EM_SETSEL, (WPARAM)caret_pos, (LPARAM)caret_pos);
+						return 0;
+					}
+					else if (edit_text_buffer[0] != 0)
+					{
+						return 0;
+					}
+				}
+				else if (!is_valid_char) 
+				{
+					return 0;
+				}
+			}	
+		}
+	}
+	
+	return default_edit_box_window_proc(hWnd, message, wParam, lParam);
+}
+
 INT_PTR CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-	static float mouseX = 0;
-	static float mouseY = 0;
+	static float mouseX;
+	static float mouseY;
 	static float mouseMinX;
 	static float mouseMaxX;
 	static float mouseStepX;
@@ -1218,6 +1291,14 @@ INT_PTR CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			bruteforcer_mouseStepYBox = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_STEPY);
 			bruteforcer_comparisonFramerangeMin = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_COMPARISONFRAMERANGEMIN);
 			bruteforcer_comparisonFramerangeMax = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_COMPARISONFRAMERANGEMAX);
+
+			default_edit_box_window_proc = (DefEditProc)SetWindowLongPtr(bruteforcer_mouseMinXBox, GWLP_WNDPROC, (LONG_PTR)&EditFloatProc);
+			SetWindowLongPtr(bruteforcer_mouseMaxXBox, GWLP_WNDPROC, (LONG_PTR)&EditFloatProc);
+			SetWindowLongPtr(bruteforcer_mouseStepXBox, GWLP_WNDPROC, (LONG_PTR)&EditFloatProc);
+			SetWindowLongPtr(bruteforcer_mouseMinYBox, GWLP_WNDPROC, (LONG_PTR)&EditFloatProc);
+			SetWindowLongPtr(bruteforcer_mouseMaxYBox, GWLP_WNDPROC, (LONG_PTR)&EditFloatProc);
+			SetWindowLongPtr(bruteforcer_mouseStepYBox, GWLP_WNDPROC, (LONG_PTR)&EditFloatProc);
+			SetWindowLongPtr(bruteforcer_expectedValueBox, GWLP_WNDPROC, (LONG_PTR)&EditFloatProc);
 
 			for (int i = 0; i < BruteforcerFaithDataType_Count; i++) {
 
@@ -1323,7 +1404,6 @@ INT_PTR CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			HWND button = GetDlgItem(window, IDC_PAUSE);
 
 			bool expressionIsTrue = false;
-			// TODO: expose min and max frame variable to the UI.
 			Edit_GetText(bruteforcer_comparisonFramerangeMin, editValueBuffer, 32);			
 			int minFrame = _wtoi(editValueBuffer);
 			Edit_GetText(bruteforcer_comparisonFramerangeMax, editValueBuffer, 32);		
@@ -1357,7 +1437,11 @@ INT_PTR CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			}
 			if (bruteforcer_started) {
 				if (expressionIsTrue && inFrameRange) {
+					bruteforcer_started = false;
 					PauseGame();
+					MessageBox(0, L"You have hit the expected value.", L"Success", MB_OK);
+					// TODO: log to text?
+					// TODO: in message box, continue?
 				}
 				else if (frame > maxFrame) {
 
@@ -1389,6 +1473,8 @@ INT_PTR CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 					}
 					else {
 						bruteforcer_started = false;
+						PauseGame();
+						MessageBox(0, L"No iteration found the expected value.", L"Failure", MB_OK);
 					}
 				}
 			}
@@ -1464,17 +1550,24 @@ INT_PTR CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			}
 			
 			break;
-		}
-		case WM_KEYDOWN:
-			if (wParam == VK_TAB) {
-				return DefWindowProc(hWnd, message, wParam, lParam);
-			}
-			break;
+		}			
 		case WM_NOTIFY: {
 			break;
 		}
 		case WM_CLOSE: {
 			bruteforcer_window = 0;
+			mouseX = 0;
+			mouseY = 0;
+	 		mouseMinX = 0;
+	 		mouseMaxX = 0;
+	 		mouseStepX = 0;
+	 		mouseMinY = 0;
+	 		mouseMaxY = 0;
+	 		mouseStepY = 0;
+	 		going = false;
+			bruteforcer_started = false;
+	 		iteration = 0;
+	 		numIterations = 0;
 			return DefWindowProcA(hWnd, message, wParam, lParam);
 			break;
 		}
