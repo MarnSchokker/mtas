@@ -101,7 +101,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 						}
 					}
 				}
-
+				else if (IsDialogMessage(bruteforcer_window, &msg)) {
+					SendMessage(bruteforcer_window, WM_KEYDOWN, msg.wParam, msg.lParam);
+					break;
+				}
+				
 				switch (msg.wParam) {
 					case VK_F1:
 						SendMessage(window, WM_COMMAND, MAKEWPARAM(IDC_ADVANCE, 0), 0);
@@ -1462,14 +1466,8 @@ INT_PTR CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			break;
 		}
 		case WM_KEYDOWN:
-			bruteforcer_window = nullptr;
 			if (wParam == VK_TAB) {
-				//hWnd next = GetWindow(hwnd, GW_NEXT);
-				//PostMessage(ghDlg, WM_NEXTDLGCTL, 0, 0L);
-				int test = 1;
-				HWND current = GetFocus();
-				HWND next = GetNextDlgTabItem(hWnd, current, true);
-				SetFocus(next);
+				return DefWindowProc(hWnd, message, wParam, lParam);
 			}
 			break;
 		case WM_NOTIFY: {
