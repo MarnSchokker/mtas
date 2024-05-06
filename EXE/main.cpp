@@ -46,9 +46,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	wcex.lpfnWndProc = FaithProc;
 	wcex.lpszClassName = L"mtas_faith";
 	RegisterClassExW(&wcex);
-	wcex.lpfnWndProc = BruteforcerProc;
-	wcex.lpszClassName = L"mtas_bruteforcer";
-	RegisterClassExW(&wcex);
 
 	window = CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_WINDOW), CreateWindow(L"mtas", L"", 0, 0, 0, 0, 0, 0, 0, wcex.hInstance, 0), DlgProc);
 	ShowWindow(window, SW_SHOW);
@@ -717,12 +714,11 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) 
 					break;
 				case ID_TOOLS_BRUTEFORCER: {
 					if (!bruteforcer_window) {
-						HWND hWnd = CreateWindow(L"mtas_bruteforcer", L"Bruteforcer", WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, 500 /*FAITH_WIDTH*/, 600 /*FAITH_HEIGHT*/, 0, 0, GetModuleHandle(0), 0);
+						bruteforcer_window = CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_BRUTEFORCER), 0, BruteforcerProc);
 						ShowWindow(bruteforcer_window, SW_SHOW);
-						UpdateWindow(bruteforcer_window);
 					}
 
-					SetFocus(bruteforcer_window);
+					//SetFocus(bruteforcer_window);
 					break;
 					
 					/*
@@ -1156,10 +1152,11 @@ static HWND bruteforcer_mouseStepXBox;
 static HWND bruteforcer_mouseMinYBox;
 static HWND bruteforcer_mouseMaxYBox;
 static HWND bruteforcer_mouseStepYBox;
+static HWND bruteforcer_comparisonFramerangeMin;
+static HWND bruteforcer_comparisonFramerangeMax;
 static const int bruteforcer_optionMaxChars = 3;
 static BruteforcerFaithDataType bruteforcer_selectedFaithData;
 static BruteforcerComparison bruteforcer_selectedComparison;
-static HWND bruteforcer_startButton;
 
 static TCHAR dropdownOptions[BruteforcerFaithDataType_Count][bruteforcer_optionMaxChars] = {
 	L"x",
@@ -1184,7 +1181,7 @@ static TCHAR BruteforcerComparisonOptions[BruteforcerComparison_Count][bruteforc
 	L"<="
 };
 
-LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+INT_PTR CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	static float mouseX = 0;
 	static float mouseY = 0;
 	static float mouseMinX;
@@ -1194,90 +1191,29 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 	static float mouseMaxY;
 	static float mouseStepY;
 	static bool going = false;
+	static int iteration;
+	static int numIterations;
 
 	switch (message) {
-		case WM_CREATE: {
+		case WM_INITDIALOG: {
 			
 			bruteforcer_window = hWnd;
 			SetTimer(hWnd, 0, 10, 0);
 			
 			HINSTANCE hInstance = (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE);
-			bruteforcer_startButton = CreateWindow(L"BUTTON", L"Button", BS_TEXT | WS_CHILD | WS_VISIBLE, 40, 40, 100, 40, hWnd, nullptr, hInstance, NULL);
-			bruteforcer_faithDataDisplay = CreateWindow(L"STATIC", L"text", BS_TEXT | WS_CHILD | WS_VISIBLE, 40, 200, 100, 40, hWnd, nullptr, hInstance, NULL);
-			
-			bruteforcer_faithDataDropdown = CreateWindow(WC_COMBOBOX, L"", CBS_DROPDOWN | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE, 40, 300, 100, 40, hWnd, nullptr, hInstance, NULL);
-			bruteforcer_comparisonDropdown = CreateWindow(WC_COMBOBOX, L"", CBS_DROPDOWN | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE, 200, 300, 100, 40, hWnd, nullptr, hInstance, NULL);
-			bruteforcer_expectedValueBox = CreateWindow(L"EDIT",
-				NULL,
-				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
-				300, 300, 100, 20,
-				hWnd,
-				nullptr,
-				hInstance,
-				NULL);
-
-			bruteforcer_iteratedFrameBox = CreateWindow(L"EDIT",
-				NULL,
-				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
-				300, 200, 100, 20,
-				hWnd,
-				nullptr,
-				hInstance,
-				NULL);
-
-			bruteforcer_mouseMinXBox = CreateWindow(L"EDIT",
-				NULL,
-				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
-				200, 100, 100, 20,
-				hWnd,
-				nullptr,
-				hInstance,
-				NULL);
-
-			bruteforcer_mouseMaxXBox = CreateWindow(L"EDIT",
-				NULL,
-				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
-				250, 100, 100, 20,
-				hWnd,
-				nullptr,
-				hInstance,
-				NULL);
-
-			bruteforcer_mouseStepXBox = CreateWindow(L"EDIT",
-				NULL,
-				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
-				300, 100, 100, 20,
-				hWnd,
-				nullptr,
-				hInstance,
-				NULL);
-
-			bruteforcer_mouseMinYBox = CreateWindow(L"EDIT",
-				NULL,
-				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
-				200, 150, 100, 20,
-				hWnd,
-				nullptr,
-				hInstance,
-				NULL);
-
-			bruteforcer_mouseMaxYBox = CreateWindow(L"EDIT",
-				NULL,
-				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
-				250, 150, 100, 20,
-				hWnd,
-				nullptr,
-				hInstance,
-				NULL);
-
-			bruteforcer_mouseStepYBox = CreateWindow(L"EDIT",
-				NULL,
-				WS_BORDER | WS_CHILD | WS_VISIBLE | ES_LEFT,
-				300, 150, 100, 20,
-				hWnd,
-				nullptr,
-				hInstance,
-				NULL);
+			bruteforcer_faithDataDisplay = GetDlgItem(hWnd, IDC_BRUTEFORCER_STATIC_DISPLAY);
+			bruteforcer_faithDataDropdown = GetDlgItem(hWnd, IDC_BRUTEFORCER_DROPDOWN_FAITHDATA);
+			bruteforcer_comparisonDropdown = GetDlgItem(hWnd, IDC_BRUTEFORCER_DROPDOWN_COMPARISON);
+			bruteforcer_expectedValueBox = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_EXPECTEDVALUE);
+			bruteforcer_iteratedFrameBox = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_ITERATEDFRAME);
+			bruteforcer_mouseMinXBox = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_MINX);
+			bruteforcer_mouseMaxXBox = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_MAXX);
+			bruteforcer_mouseStepXBox = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_STEPX);
+			bruteforcer_mouseMinYBox = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_MINY);
+			bruteforcer_mouseMaxYBox = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_MAXY);
+			bruteforcer_mouseStepYBox = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_STEPY);
+			bruteforcer_comparisonFramerangeMin = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_COMPARISONFRAMERANGEMIN);
+			bruteforcer_comparisonFramerangeMax = GetDlgItem(hWnd, IDC_BRUTEFORCER_EDIT_COMPARISONFRAMERANGEMAX);
 
 			for (int i = 0; i < BruteforcerFaithDataType_Count; i++) {
 
@@ -1369,21 +1305,25 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
 			}
 			sprintf_s(compTextBuffer, 32, "%.3f", value);
-			
 
-			SetWindowTextA(bruteforcer_faithDataDisplay, compTextBuffer);
+			char displayTextBuffer[32]{};
+			sprintf_s(displayTextBuffer, 32, "Iteration:\n%d\nOut of:\n%d", iteration, numIterations);
 
-			TCHAR ExpectedValueStringBuffer[32];
-			Edit_GetText(bruteforcer_expectedValueBox, ExpectedValueStringBuffer, 32);
-			float expectedValue = _wtof(ExpectedValueStringBuffer);
+			SetWindowTextA(bruteforcer_faithDataDisplay, displayTextBuffer);
+
+			TCHAR editValueBuffer[32];
+			Edit_GetText(bruteforcer_expectedValueBox, editValueBuffer, 32);
+			float expectedValue = _wtof(editValueBuffer);
 
 			bool isPaused = CallRead(dll.GetControl) == 1;
 			HWND button = GetDlgItem(window, IDC_PAUSE);
 
 			bool expressionIsTrue = false;
 			// TODO: expose min and max frame variable to the UI.
-			int minFrame = 400;
-			int maxFrame = 450;
+			Edit_GetText(bruteforcer_comparisonFramerangeMin, editValueBuffer, 32);			
+			int minFrame = _wtoi(editValueBuffer);
+			Edit_GetText(bruteforcer_comparisonFramerangeMax, editValueBuffer, 32);		
+			int maxFrame = _wtoi(editValueBuffer);
 			int frame = CallRead(dll.GetDemoFrame);
 			bool inFrameRange = frame >= minFrame && frame <= maxFrame;
 
@@ -1438,6 +1378,7 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 						}
 						
 						if (going == false) {
+							iteration++;
 							Call(dll.GotoFrame, bruteforcer_iteratedFrame - 1);
 							going = true;
 						}
@@ -1450,15 +1391,11 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			break;
 		}
 
-		case WM_INITDIALOG: {
 
-		
-			break;
-		}
 		case WM_COMMAND: {
 			HWND receivedHandle = (HWND)lParam;
 
-			if (receivedHandle == bruteforcer_startButton) {
+			if (LOWORD(wParam) == IDC_BRUTEFORCER_BUTTON_START) {
 
 				bruteforcer_started = true;
 
@@ -1496,6 +1433,16 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
 				mouseX = mouseMinX;	
 				mouseY = mouseMinY;
+				float numIterationsX = 1;
+				float numIterationsY = 1;
+				if (mouseStepX > 0) {
+					numIterationsX = (mouseMaxX - mouseMinX) / mouseStepX;
+				}
+				if (numIterationsY > 0) {
+					(mouseMaxY - mouseMinY) / mouseStepY;
+				}
+				numIterations = numIterationsX * numIterationsY;
+
 			}
 
 			if (HIWORD(wParam) == CBN_SELCHANGE) {
@@ -1514,6 +1461,17 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			
 			break;
 		}
+		case WM_KEYDOWN:
+			bruteforcer_window = nullptr;
+			if (wParam == VK_TAB) {
+				//hWnd next = GetWindow(hwnd, GW_NEXT);
+				//PostMessage(ghDlg, WM_NEXTDLGCTL, 0, 0L);
+				int test = 1;
+				HWND current = GetFocus();
+				HWND next = GetNextDlgTabItem(hWnd, current, true);
+				SetFocus(next);
+			}
+			break;
 		case WM_NOTIFY: {
 			break;
 		}
@@ -1524,7 +1482,7 @@ LRESULT CALLBACK BruteforcerProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		}
 
 	}
-	return DefWindowProc(hWnd, message, wParam, lParam);;
+	return (INT_PTR)FALSE;
 
 }
 
